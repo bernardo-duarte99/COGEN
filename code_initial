@@ -1,0 +1,171 @@
+##Backend loggic
+import speech_recognition as sr
+from langdetect import detect
+
+# Gesture Mapping
+gesture_languages = {
+    "asl": {
+        "hello": "wave_hand",
+        "thank you": "bow",
+        "yes": "nod",
+        "no": "shake_head",
+        "goodbye": "wave_hand",
+        "happy": "smile",
+        "sad": "frown",
+        "angry": "fist_shake",
+        "surprise": "head_tilt",
+    },
+    "bsl": {
+        "hello": "wave_hand_bsl",
+        "thank you": "bow_bsl",
+        "yes": "nod_bsl",
+        "no": "shake_head_bsl",
+        "goodbye": "wave_hand_bsl",
+        "happy": "smile_bsl",
+        "sad": "frown_bsl",
+        "angry": "fist_shake_bsl",
+        "surprise": "head_tilt_bsl",
+    },
+}
+
+# Default language
+current_language = "asl"
+
+
+def detect_language(text):
+    """
+    Detects the language of the given text.
+    """
+    try:
+        return detect(text)
+    except Exception as e:
+        return "unknown"
+
+
+def translate_text_to_gesture(text, language="asl"):
+    """
+    Translates text into gestures for the selected gestural language.
+    """
+    gesture_map = gesture_languages.get(language, {})
+    words = text.lower().split()
+    gestures = [gesture_map.get(word, "neutral") for word in words]
+    return gestures
+
+
+def process_microphone_input():
+    """
+    Processes live speech from the microphone.
+    """
+    recognizer = sr.Recognizer()
+    with sr.Microphone() as source:
+        print("Listening...")
+        try:
+            audio = recognizer.listen(source)
+            text = recognizer.recognize_google(audio)
+            print(f"Detected Speech: {text}")
+            gestures = translate_text_to_gesture(text, current_language)
+            print(f"Translated Gestures: {gestures}")
+            return gestures
+        except sr.UnknownValueError:
+            print("Could not understand audio.")
+            return ["neutral"]
+        except sr.RequestError as e:
+            print(f"Error: {e}")
+            return ["neutral"]
+
+
+def process_video_audio(video_path):
+    """
+    Extracts audio from a video file and processes it into gestures.
+    """
+    from moviepy.editor import VideoFileClip
+
+    recognizer = sr.Recognizer()
+    with VideoFileClip(video_path) as video:
+        audio = video.audio
+        temp_audio_path = "temp_audio.wav"
+        audio.write_audiofile(temp_audio_path)
+        
+        with sr.AudioFile(temp_audio_path) as source:
+            audio_data = recognizer.record(source)
+            try:
+                text = recognizer.recognize_google(audio_data)
+                print(f"Detected Speech: {text}")
+                gestures = translate_text_to_gesture(text, current_language)
+                print(f"Translated Gestures: {gestures}")
+                return gestures
+            except sr.UnknownValueError:
+                print("Could not understand audio.")
+                return ["neutral"]
+            except sr.RequestError as e:
+                print(f"Error: {e}")
+                return ["neutral"]
+
+
+# Example Testing
+if __name__ == "__main__":
+    print("1: Microphone Input")
+    print("2: Video File")
+    choice = input("Choose input method: ")
+    if choice == "1":
+        process_microphone_input()
+    elif choice == "2":
+        video_path = input("Enter video file path: ")
+        process_video_audio(video_path)
+________________________________________
+
+# Gui for the App
+import sys
+from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QFileDialog, QLabel, QVBoxLayout, QWidget
+from app import process_microphone_input, process_video_audio
+
+
+class GestureApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Gesture Translator App")
+        self.setGeometry(100, 100, 400, 200)
+
+        # Main layout
+        layout = QVBoxLayout()
+
+        # Buttons
+        self.microphone_button = QPushButton("Start Live Conversation")
+        self.microphone_button.clicked.connect(self.handle_microphone_input)
+        layout.addWidget(self.microphone_button)
+
+        self.video_button = QPushButton("Process Video File")
+        self.video_button.clicked.connect(self.handle_video_file)
+        layout.addWidget(self.video_button)
+
+        # Label for output
+        self.output_label = QLabel("")
+        layout.addWidget(self.output_label)
+
+        # Central widget
+        central_widget = QWidget()
+        central_widget.setLayout(layout)
+        self.setCentralWidget(central_widget)
+
+    def handle_microphone_input(self):
+        """
+        Handles live microphone input for real-life conversations.
+        """
+        gestures = process_microphone_input()
+        self.output_label.setText(f"Detected Gestures: {', '.join(gestures)}")
+
+    def handle_video_file(self):
+        """
+        Handles video file input for social media or meetings.
+        """
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select Video File")
+        if file_path:
+            gestures = process_video_audio(file_path)
+            self.output_label.setText(f"Detected Gestures: {', '.join(gestures)}")
+
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    main_window = GestureApp()
+    main_window.show()
+    sys.exit(app.exec_())
